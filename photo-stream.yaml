@@ -1,0 +1,71 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: photo-stream-deployment
+  labels:
+    app: photo-stream
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: photo-stream
+  template:
+    metadata:
+      labels:
+        app: photo-stream
+      annotations:
+        configHash: "1"
+    spec:
+      containers:
+      - name: photo-stream
+        image: mariogulci/photo-stream:latest
+        imagePullPolicy: Always
+        envFrom:
+          - configMapRef:
+              name: photo-stream-config
+              optional: false
+        volumeMounts:
+          - name: gsa-creds
+            mountPath: "/var/secrets"
+        lifecycle:
+          postStart:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - cp /var/secrets/gsa.json /photo-stream/gsa.json
+        resources:
+          requests:
+            memory: ".5Gi"
+            cpu: "500m"
+          limits:
+            memory: ".5Gi"
+            cpu: "500m"
+        ports:
+        - containerPort: 4000
+      volumes:
+      - name: gsa-creds
+        secret:
+          secretName: gsa-creds
+          optional: false
+---
+apiVersion: v1
+kind: Service
+metadata:
+    labels:
+        app: ingress-upstream
+    name: ingress-upstream
+    namespace: default
+spec:
+    ports:
+    - name: http
+      port: 80
+      protocol: TCP
+      targetPort: 4000
+    selector:
+        app: photo-stream
+    sessionAffinity: None
+    type: ClusterIP
+status:
+    loadBalancer: {}
+---
